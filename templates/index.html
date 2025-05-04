@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Denoisor | Advanced Denoising System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/wavesurfer.js@7"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #3B82F6;
+            --primary-dark: #2563EB;
+            --secondary: #10B981;
+            --secondary-dark: #059669;
+            --accent: #8B5CF6;
+            --accent-dark: #7C3AED;
+            --dark: #1F2937;
+            --light: #F9FAFB;
+            --gray: #9CA3AF;
+            --error: #EF4444;
+            --warning: #F59E0B;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        }
+        
+        body {
+            background-color: #F3F4F6;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* Custom styles for waveform containers */
+        #waveform-input, #waveform-denoised {
+            width: 100%;
+            height: 80px;
+            margin: 10px 0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        /* Custom range slider styles */
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 8px;
+            border-radius: 4px;
+            background: #E5E7EB;
+            outline: none;
+            padding: 0;
+            margin: 10px 0;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--primary);
+            cursor: pointer;
+            border: 3px solid white;
+            box-shadow: 0 0 5px rgba(0,0,0,0.2);
+        }
+        
+        input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--primary);
+            cursor: pointer;
+            border: 3px solid white;
+            box-shadow: 0 0 5px rgba(0,0,0,0.2);
+        }
+        
+        /* Image display container */
+        .image-display {
+            aspect-ratio: 1/1;
+            width: 100%;
+            max-height: 300px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            border-radius: 8px;
+            background-color: #F9FAFB;
+            border: 1px dashed #D1D5DB;
+            position: relative;
+        }
+        
+        .image-display img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        
+        .placeholder {
+            color: #9CA3AF;
+            text-align: center;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .placeholder i {
+            font-size: 3rem;
+            color: #D1D5DB;
+        }
+        
+        /* Loading spinner */
+        .loading-spinner {
+            width: 60px;
+            height: 60px;
+            display: inline-block;
+            position: relative;
+        }
+        
+        .loading-spinner:after,
+        .loading-spinner:before {
+            content: '';
+            width: 60px;
+            height: 60px;
+            border: 4px solid transparent;
+            border-radius: 50%;
+            position: absolute;
+        }
+        
+        .loading-spinner:before {
+            border-top-color: var(--primary);
+            border-bottom-color: var(--accent);
+            animation: spinBefore 1.5s linear infinite;
+        }
+        
+        .loading-spinner:after {
+            border-left-color: var(--secondary);
+            border-right-color: var(--warning);
+            animation: spinAfter 1. acuerdo linear infinite;
+        }
+        
+        @keyframes spinBefore {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        @keyframes spinAfter {
+            0% { transform: rotate(90deg); }
+            100% { transform: rotate(450deg); }
+        }
+        
+        /* Tab animation */
+        .tab-transition {
+            transition: all 0.3s ease-in-out;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header with Logo -->
+    <header class="bg-gradient-to-r from-blue-600 to-indigo-700 text-white py-6 px-4 shadow-lg">
+        <div class="container mx-auto flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <span class="text-3xl">🧹</span>
+                <h1 class="text-2xl md:text-3xl font-bold tracking-tight">Denoisor</h1>
+            </div>
+            <p class="hidden md:block text-sm md:text-base font-light">Advanced AI-powered denoising for images and audio</p>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container mx-auto py-8 px-4 flex-grow">
+        <!-- Tabs Navigation -->
+        <div class="flex justify-center mb-6">
+            <div class="bg-white rounded-full shadow-md p-1 flex">
+                <button id="tab-image" class="py-2 px-6 rounded-full text-sm font-medium tab-transition bg-blue-600 text-white">
+                    <i class="fas fa-image mr-2"></i>Image Denoising
+                </button>
+                <button id="tab-audio" class="py-2 px-6 rounded-full text-sm font-medium tab-transition text-gray-700 hover:bg-gray-100">
+                    <i class="fas fa-volume-up mr-2"></i>Audio Denoising
+                </button>
+            </div>
+        </div>
+
+        <!-- Image Denoising Tab -->
+        <div id="content-image" class="tab-content">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Image Controls Panel -->
+                <div class="bg-white rounded-xl shadow-md p-6 h-fit">
+                    <h2 class="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+                        <i class="fas fa-sliders mr-2 text-blue-600"></i>
+                        Control Panel
+                    </h2>
+                    
+                    <div class="mb-6 border border-dashed border-blue-200 bg-blue-50 rounded-lg p-4 text-center" id="img-dropZone">
+                        <i class="fas fa-cloud-upload-alt text-4xl text-blue-500 mb-3"></i>
+                        <h3 class="text-lg font-medium text-gray-800 mb-1">Upload Image</h3>
+                        <p class="text-gray-500 text-sm mb-3">Drag & drop your image here or click to browse</p>
+                        <button class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition duration-200 text-sm">
+                            <i class="fas fa-image mr-2"></i> Select Image
+                        </button>
+                        <input type="file" id="imageUpload" accept="image/*" class="hidden">
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label for="processingMode" class="block text-gray-700 font-medium mb-2">Processing Mode</label>
+                        <select id="processingMode" class="w-full bg-gray-50 border border-gray-300 text-gray-900 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option value="add_noise">Add Noise & Denoise</option>
+                            <option value="denoise_only">Denoise Only</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-4" id="noiseTypeContainer">
+                        <label for="noiseType" class="block text-gray-700 font-medium mb-2">Noise Type</label>
+                        <select id="noiseType" class="w-full bg-gray-50 border border-gray-300 text-gray-900 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option value="gaussian">Gaussian Noise</option>
+                            <option value="salt_pepper">Salt & Pepper Noise</option>
+                            <option value="poisson">Poisson Noise</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-6" id="noiseFactorContainer">
+                        <label for="noiseFactor" class="block text-gray-700 font-medium mb-2 flex justify-between">
+                            <span>Noise Intensity</span>
+                            <span id="noiseFactorValue" class="text-blue-600 font-semibold">0.30</span>
+                        </label>
+                        <input type="range" id="noiseFactor" min="0.1" max="0.5" step="0.05" value="0.3">
+                    </div>
+                    
+                    <button id="processImgBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition duration-200 flex items-center justify-center disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>
+                        <i class="fas fa-magic mr-2"></i> Process Image
+                    </button>
+                    
+                    <div class="mt-4">
+                        <button id="downloadImgBtn" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-medium py-2.5 px-4 rounded-lg transition duration-200 flex items-center justify-center disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>
+                            <i class="fas fa-download mr-2"></i> Download
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Image Results Panel -->
+                <div class="lg:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="bg-white rounded-xl shadow-md p-4">
+                        <h3 class="text-lg font-medium text-gray-800 mb-3">Original Image</h3>
+                        <div class="image-display" id="originalImage">
+                            <div class="placeholder">
+                                <i class="fas fa-image"></i>
+                                <p class="text-sm">Original image will appear here</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-xl shadow-md p-4">
+                        <h3 class="text-lg font-medium text-gray-800 mb-3">Noisy Image</h3>
+                        <div class="image-display" id="noisyImage">
+                            <div class="placeholder">
+                                <i class="fas fa-image"></i>
+                                <p class="text-sm">Noisy image will appear here</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-xl shadow-md p-4">
+                        <h3 class="text-lg font-medium text-gray-800 mb-3 flex justify-between items-center">
+                            <span>Denoised Result</span>
+                            <span id="psnrValue" class="bg-teal-500 text-white text-xs px-2 py-1 rounded-full hidden">
+                                <i class="fas fa-chart-line mr-1"></i> PSNR: 0 dB
+                            </span>
+                        </h3>
+                        <div class="image-display" id="denoisedImage">
+                            <div class="placeholder">
+                                <i class="fas fa-image"></i>
+                                <p class="text-sm">Denoised image will appear here</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Image Processing Stats -->
+                    <div class="bg-white rounded-xl shadow-md p-4 md:col-span-3">
+                        <h3 class="text-lg font-medium text-gray-800 mb-3">Processing Statistics</h3>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div class="bg-gray-50 p-3 rounded-lg text-center">
+                                <div class="text-blue-600 mb-1">
+                                    <i class="fas fa-wave-square text-xl"></i>
+                                </div>
+                                <p class="text-xs text-gray-500">Noise Type</p>
+                                <p id="noiseTypeStat" class="text-lg font-semibold text-gray-800">-</p>
+                            </div>
+                            
+                            <div class="bg-gray-50 p-3 rounded-lg text-center">
+                                <div class="text-blue-600 mb-1">
+                                    <i class="fas fa-gauge-high text-xl"></i>
+                                </div>
+                                <p class="text-xs text-gray-500">Noise Intensity</p>
+                                <p id="noiseFactorStat" class="text-lg font-semibold text-gray-800">-</p>
+                            </div>
+                            
+                            <div class="bg-gray-50 p-3 rounded-lg text-center">
+                                <div class="text-blue-600 mb-1">
+                                    <i class="fas fa-signal text-xl"></i>
+                                </div>
+                                <p class="text-xs text-gray-500">PSNR Value</p>
+                                <p id="psnrStat" class="text-lg font-semibold text-gray-800">-</p>
+                            </div>
+                            
+                            <div class="bg-gray-50 p-3 rounded-lg text-center">
+                                <div class="text-blue-600 mb-1">
+                                    <i class="fas fa-layer-group text-xl"></i>
+                                </div>
+                                <p class="text-xs text-gray-500">Ensemble Size</p>
+                                <p id="ensembleSize" class="text-lg font-semibold text-gray-800">3</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Audio Denoising Tab -->
+        <div id="content-audio" class="tab-content hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Audio Controls Panel -->
+                <div class="bg-white rounded-xl shadow-md p-6 h-fit">
+                    <h2 class="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+                        <i class="fas fa-sliders mr-2 text-indigo-600"></i>
+                        Control Panel
+                    </h2>
+                    
+                    <div class="flex flex-col space-y-3 mb-6">
+                        <button id="recordBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 px-4 rounded-lg transition duration-200 flex items-center justify-center">
+                            <i class="fas fa-microphone mr-2"></i> Start Recording
+                        </button>
+                        
+                        <div class="relative">
+                            <label for="uploadAudio" class="block w-full border border-dashed border-indigo-200 bg-indigo-50 rounded-lg p-4 text-center cursor-pointer hover:bg-indigo-100 transition duration-200">
+                                <i class="fas fa-cloud-upload-alt text-2xl text-indigo-500 mb-2"></i>
+                                <p class="text-gray-700 font-medium">Upload Audio File</p>
+                                <p class="text-gray-500 text-xs mt-1">Click to browse or drag & drop</p>
+                            </label>
+                            <input type="file" id="uploadAudio" accept="audio/*" class="hidden">
+                        </div>
+                    </div>
+                    
+                    <div class="bg-gray-50 rounded-lg p-3 mb-6">
+                        <p id="audioStatus" class="text-sm text-center text-gray-600">Record or upload audio to begin</p>
+                    </div>
+                    
+                    <button id="denoiseAudioBtn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 px-4 rounded-lg transition duration-200 flex items-center justify-center disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>
+                        <i class="fas fa-magic mr-2"></i> Denoise Audio
+                    </button>
+                </div>
+                
+                <!-- Audio Results Panel -->
+                <div class="lg:col-span-2">
+                    <div class="grid grid-cols-1 gap-6">
+                        <div class="bg-white rounded-xl shadow-md p-6">
+                            <h3 class="text-lg font-medium text-gray-800 mb-3">Input Audio (Noised)</h3>
+                            <div id="waveform-input" class="border border-gray-200 rounded-lg"></div>
+                            <div class="mt-3">
+                                <audio id="recordedAudio" controls class="w-full hidden"></audio>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-white rounded-xl shadow-md p-6">
+                            <h3 class="text-lg font-medium text-gray-800 mb-3">Denoised Audio</h3>
+                            <div id="waveform-denoised" class="border border-gray-200 rounded-lg"></div>
+                            <div class="mt-3">
+                                <audio id="denoisedAudio" controls class="w-full hidden"></audio>
+                                <div id="denoisedPlaceholder" class="text-center text-gray-500 py-2">
+                                    <p>Denoised audio will appear here</p>
+                                </div>
+                            </div>
+                            
+                            <div class="mt-4 flex justify-end">
+                                <button id="downloadAudioBtn" class="bg-teal-600 hover:bg-teal-700 text-white font-medium py-2 px-4 rounded-lg transition duration-200 flex items-center justify-center disabled:bg-gray-400 disabled:cursor-not-allowed hidden">
+                                    <i class="fas fa-download mr-2"></i> Download Denoised Audio
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="fixed inset-0 bg-gray-900 bg-opacity-75 backdrop-blur-sm flex items-center justify-center z-50 hidden">
+        <div class="text-center text-white">
+            <div class="loading-spinner mb-4"></div>
+            <p id="loadingText" class="text-xl font-medium">Processing...</p>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-gray-800 text-white py-6 px-4">
+        <div class="container mx-auto text-center">
+            <p>Denoisor Advanced Denoising System © 2025 | TM Sachith</p>
+        </div>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            /* ------- TAB SWITCHING -------- */
+            const tabImage = document.getElementById('tab-image');
+            const tabAudio = document.getElementById('tab-audio');
+            const contentImage = document.getElementById('content-image');
+            const contentAudio = document.getElementById('content-audio');
+            
+            tabImage.addEventListener('click', () => {
+                tabImage.classList.add('bg-blue-600', 'text-white');
+                tabImage.classList.remove('text-gray-700', 'hover:bg-gray-100');
+                tabAudio.classList.remove('bg-indigo-600', 'text-white');
+                tabAudio.classList.add('text-gray-700', 'hover:bg-gray-100');
+                
+                contentImage.classList.remove('hidden');
+                contentAudio.classList.add('hidden');
+            });
+            
+            tabAudio.addEventListener('click', () => {
+                tabAudio.classList.add('bg-indigo-600', 'text-white');
+                tabAudio.classList.remove('text-gray-700', 'hover:bg-gray-100');
+                tabImage.classList.remove('bg-blue-600', 'text-white');
+                tabImage.classList.add('text-gray-700', 'hover:bg-gray-100');
+                
+                contentAudio.classList.remove('hidden');
+                contentImage.classList.add('hidden');
+            });
+            
+            /* ------- IMAGE DENOISING -------- */
+            // Elements
+            const imageUpload = document.getElementById('imageUpload');
+            const dropZone = document.getElementById('img-dropZone');
+            const processImgBtn = document.getElementById('processImgBtn');
+            const downloadImgBtn = document.getElementById('downloadImgBtn');
+            const processingMode = document.getElementById('processingMode');
+            const noiseTypeContainer = document.getElementById('noiseTypeContainer');
+            const noiseFactorContainer = document.getElementById('noiseFactorContainer');
+            const noiseType = document.getElementById('noiseType');
+            const noiseFactor = document.getElementById('noiseFactor');
+            const noiseFactorValue = document.getElementById('noiseFactorValue');
+            const originalImage = document.getElementById('originalImage');
+            const noisyImage = document.getElementById('noisyImage');
+            const denoisedImage = document.getElementById('denoisedImage');
+            const psnrValue = document.getElementById('psnrValue');
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            const loadingText = document.getElementById('loadingText');
+            
+            // Stats
+            const noiseTypeStat = document.getElementById('noiseTypeStat');
+            const noiseFactorStat = document.getElementById('noiseFactorStat');
+            const psnrStat = document.getElementById('psnrStat');
+            
+            // State
+            let currentImageFile = null;
+            let originalImageData = null;
+            let noisyImageData = null;
+            let denoisedImageData = null;
+            
+            // Event listeners
+            dropZone.addEventListener('click', () => imageUpload.click());
+            
+            // File upload
+            imageUpload.addEventListener('change', handleImageSelect);
+            
+            // Drag and drop
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropZone.classList.add('bg-blue-100');
+                dropZone.classList.add('border-blue-300');
+            });
+            
+            dropZone.addEventListener('dragleave', () => {
+                dropZone.classList.remove('bg-blue-100');
+                dropZone.classList.remove('border-blue-300');
+            });
+            
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('bg-blue-100');
+                dropZone.classList.remove('border-blue-300');
+                
+                if (e.dataTransfer.files.length) {
+                    handleImageFiles(e.dataTransfer.files);
+                }
+            });
+            
+            // Processing mode change
+            processingMode.addEventListener('change', () => {
+                if (processingMode.value === 'denoise_only') {
+                    noiseTypeContainer.classList.add('hidden');
+                    noiseFactorContainer.classList.add('hidden');
+                    noiseTypeStat.textContent = 'N/A';
+                    noiseFactorStat.textContent = 'N/A';
+                } else {
+                    noiseTypeContainer.classList.remove('hidden');
+                    noiseFactorContainer.classList.remove('hidden');
+                    noiseTypeStat.textContent = getNoiseTypeDisplay(noiseType.value);
+                    noiseFactorStat.textContent = noiseFactor.value;
+                }
+            });
+            
+            // Process button
+            processImgBtn.addEventListener('click', processImage);
+            
+            // Noise factor slider
+            noiseFactor.addEventListener('input', () => {
+                noiseFactorValue.textContent = parseFloat(noiseFactor.value).toFixed(2);
+            });
+            
+            // Download button
+            downloadImgBtn.addEventListener('click', downloadImage);
+            
+            // Functions
+            function handleImageSelect(e) {
+                handleImageFiles(e.target.files);
+            }
+            
+            function handleImageFiles(files) {
+                if (!files.length) return;
+                
+                const file = files[0];
+                if (!file.type.match('image.*')) {
+                    alert('Please select an image file.');
+                    return;
+                }
+                
+                currentImageFile = file;
+                processImgBtn.disabled = false;
+                
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    clearImages();
+                    originalImageData = e.target.result;
+                    originalImage.innerHTML = `<img src="${originalImageData}" alt="Original">`;
+                };
+                reader.readAsDataURL(file);
+            }
+            
+            function clearImages() {
+                noisyImage.innerHTML = `<div class="placeholder">
+                    <i class="fas fa-image"></i>
+                    <p class="text-sm">Noisy image will appear here</p>
+                </div>`;
+                
+                denoisedImage.innerHTML = `<div class="placeholder">
+                    <i class="fas fa-image"></i>
+                    <p class="text-sm">Denoised image will appear here</p>
+                </div>`;
+                
+                psnrValue.classList.add('hidden');
+                downloadImgBtn.disabled = true;
+                
+                // Reset stats
+                if (processingMode.value !== 'denoise_only') {
+                    noiseTypeStat.textContent = getNoiseTypeDisplay(noiseType.value);
+                    noiseFactorStat.textContent = noiseFactor.value;
+                } else {
+                    noiseTypeStat.textContent = 'N/A';
+                    noiseFactorStat.textContent = 'N/A';
+                }
+                psnrStat.textContent = '-';
+                
+                // Reset image data
+                noisyImageData = null;
+                denoisedImageData = null;
+            }
+            
+            function processImage() {
+                if (!currentImageFile) return;
+                
+                // Show loading
+                loadingText.textContent = "Processing image...";
+                loadingOverlay.classList.remove('hidden');
+                
+                // Create form data
+                const formData = new FormData();
+                formData.append('image', currentImageFile);
+                formData.append('noise_type', noiseType.value);
+                formData.append('noise_factor', noiseFactor.value);
+                formData.append('denoise_only', processingMode.value === 'denoise_only');
+                
+                // Send to server
+                fetch('/image/denoise', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        alert('Error: ' + data.error);
+                        return;
+                    }
+                    
+                    // Display images with consistent sizing
+                    noisyImageData = `data:image/png;base64,${data.noisy}`;
+                    denoisedImageData = `data:image/png;base64,${data.denoised}`;
+                    
+                    noisyImage.innerHTML = `<img src="${noisyImageData}" alt="Noisy">`;
+                    denoisedImage.innerHTML = `<img src="${denoisedImageData}" alt="Denoised">`;
+                    
+                    // Show PSNR with proper formatting
+                    const psnrFormatted = parseFloat(data.psnr).toFixed(2);
+                    psnrValue.innerHTML = `<i class="fas fa-chart-line mr-1"></i> PSNR: ${psnrFormatted} dB`;
+                    psnrValue.classList.remove('hidden');
+                    
+                    // Update stats
+                    if (processingMode.value !== 'denoise_only') {
+                        noiseTypeStat.textContent = getNoiseTypeDisplay(noiseType.value);
+                        noiseFactorStat.textContent = noiseFactor.value;
+                    } else {
+                        noiseTypeStat.textContent = 'N/A';
+                        noiseFactorStat.textContent = 'N/A';
+                    }
+                    psnrStat.textContent = `${psnrFormatted} dB`;
+                    
+                    // Enable buttons
+                    downloadImgBtn.disabled = false;
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred while processing the image.');
+                })
+                .finally(() => {
+                    loadingOverlay.classList.add('hidden');
+                });
+            }
+            
+            function getNoiseTypeDisplay(type) {
+                const map = {
+                    'gaussian': 'Gaussian',
+                    'salt_pepper': 'Salt & Pepper',
+                    'poisson': 'Poisson'
+                };
+                return map[type] || type;
+            }
+            
+            function downloadImage() {
+                if (!denoisedImageData) return;
+                
+                // Create download link
+                fetch('/image/download', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        imageData: denoisedImageData
+                    })
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.blob();
+                })
+                .then(blob => {
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'denoised_image.png';
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    window.URL.revokeObjectURL(url);
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred while downloading the image.');
+                    
+                    // Fallback direct download method
+                    const a = document.createElement('a');
+                    a.href = denoisedImageData;
+                    a.download = 'denoised_image.png';
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                });
+            }
+            
+            /* ------- AUDIO DENOISING -------- */
+            let mediaRecorder;
+            let audioChunks = [];
+            let recordedBlob = null;
+            let isRecording = false;
+            let recordingStartTime;
+            const minRecordingDuration = 3000; // 3 seconds
+            
+            const recordBtn = document.getElementById('recordBtn');
+            const uploadAudio = document.getElementById('uploadAudio');
+            const denoiseAudioBtn = document.getElementById('denoiseAudioBtn');
+            const recordedAudio = document.getElementById('recordedAudio');
+            const denoisedAudio = document.getElementById('denoisedAudio');
+            const denoisedPlaceholder = document.getElementById('denoisedPlaceholder');
+            const audioStatus = document.getElementById('audioStatus');
+            const downloadAudioBtn = document.getElementById('downloadAudioBtn');
+
+            // Initialize WaveSurfer.js instances
+            const wavesurferInput = WaveSurfer.create({
+                container: '#waveform-input',
+                waveColor: '#6366F1',
+                progressColor: '#4F46E5',
+                cursorColor: '#4F46E5',
+                height: 80,
+                barWidth: 2,
+                normalize: true
+            });
+            
+            const wavesurferDenoised = WaveSurfer.create({
+                container: '#waveform-denoised',
+                waveColor: '#10B981',
+                progressColor: '#059669',
+                cursorColor: '#059669',
+                height: 80,
+                barWidth: 2,
+                normalize: true
+            });
+
+            // Request microphone access
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(stream => {
+                    // Prefer WAV, fallback to WebM
+                    const mimeType = MediaRecorder.isTypeSupported('audio/wav') ? 'audio/wav' : 'audio/webm';
+                    console.log('Selected MIME type:', mimeType);
+                    mediaRecorder = new MediaRecorder(stream, { mimeType });
+
+                    mediaRecorder.ondataavailable = event => {
+                        audioChunks.push(event.data);
+                    };
+
+                    mediaRecorder.onstop = () => {
+                        const recordingDuration = Date.now() - recordingStartTime;
+                        if (recordingDuration < minRecordingDuration) {
+                            audioStatus.textContent = `Recording too short (${(recordingDuration/1000).toFixed(1)}s). Please record for at least 3 seconds.`;
+                            audioChunks = [];
+                            denoiseAudioBtn.disabled = true;
+                            wavesurferInput.empty();
+                            return;
+                        }
+
+                        recordedBlob = new Blob(audioChunks, { type: mimeType });
+                        if (recordedBlob.size < 1000) {
+                            audioStatus.textContent = 'Recorded audio is too small or invalid. Check your microphone and try again.';
+                            audioChunks = [];
+                            recordedBlob = null;
+                            denoiseAudioBtn.disabled = true;
+                            wavesurferInput.empty();
+                            return;
+                        }
+
+                        handleAudioBlob(recordedBlob, mimeType);
+                        audioChunks = [];
+                    };
+                })
+                .catch(err => {
+                    audioStatus.textContent = 'Error accessing microphone: ' + err.message;
+                    console.error('Microphone error:', err);
+                });
+
+            // Function to handle audio blob (for both recorded and uploaded audio)
+            function handleAudioBlob(blob, mimeType) {
+                recordedBlob = blob;
+                const audioUrl = URL.createObjectURL(blob);
+                recordedAudio.src = audioUrl;
+                denoiseAudioBtn.disabled = false;
+
+                // Load audio into input waveform
+                wavesurferInput.loadBlob(blob);
+                recordedAudio.classList.remove('hidden');
+
+                audioStatus.textContent = 'Audio ready. Click Denoise to process.';
+                wavesurferDenoised.empty();
+                denoisedAudio.classList.add('hidden');
+                denoisedPlaceholder.classList.remove('hidden');
+                downloadAudioBtn.classList.add('hidden');
+            }
+
+            // Record button click handler
+            recordBtn.addEventListener('click', () => {
+                if (!isRecording) {
+                    mediaRecorder.start();
+                    recordingStartTime = Date.now();
+                    recordBtn.innerHTML = '<i class="fas fa-stop-circle mr-2"></i> Stop Recording';
+                    recordBtn.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
+                    recordBtn.classList.add('bg-red-600', 'hover:bg-red-700');
+                    audioStatus.textContent = 'Recording... (please record for at least 3 seconds)';
+                    isRecording = true;
+                    denoiseAudioBtn.disabled = true;
+                    wavesurferInput.empty();
+                    wavesurferDenoised.empty();
+                    recordedAudio.classList.add('hidden');
+                    denoisedAudio.classList.add('hidden');
+                    denoisedPlaceholder.classList.remove('hidden');
+                    downloadAudioBtn.classList.add('hidden');
+                    uploadAudio.value = ''; // Clear upload input
+                } else {
+                    mediaRecorder.stop();
+                    recordBtn.innerHTML = '<i class="fas fa-microphone mr-2"></i> Start Recording';
+                    recordBtn.classList.remove('bg-red-600', 'hover:bg-red-700');
+                    recordBtn.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
+                    audioStatus.textContent = 'Recording stopped. Processing...';
+                    isRecording = false;
+                }
+            });
+
+            // Upload audio handler
+            uploadAudio.addEventListener('change', (event) => {
+                const file = event.target.files[0];
+                if (!file) {
+                    audioStatus.textContent = 'No file selected.';
+                    return;
+                }
+
+                // Validate file type
+                if (!file.type.startsWith('audio/')) {
+                    audioStatus.textContent = 'Please upload a valid audio file.';
+                    uploadAudio.value = '';
+                    return;
+                }
+
+                // Validate file size (e.g., < 10MB)
+                if (file.size > 10 * 1024 * 1024) {
+                    audioStatus.textContent = 'File size exceeds 10MB limit.';
+                    uploadAudio.value = '';
+                    return;
+                }
+
+                audioStatus.textContent = 'Loading uploaded audio...';
+                recordedBlob = file;
+                const mimeType = file.type;
+                handleAudioBlob(file, mimeType);
+            });
+
+            // Denoise button click handler
+            denoiseAudioBtn.addEventListener('click', () => {
+                if (!recordedBlob) {
+                    audioStatus.textContent = 'No valid audio recorded or uploaded yet.';
+                    return;
+                }
+
+                audioStatus.textContent = 'Denoising... Please wait.';
+                denoiseAudioBtn.disabled = true;
+                loadingText.textContent = "Processing audio...";
+                loadingOverlay.classList.remove('hidden');
+
+                const mimeType = recordedBlob.type || 'audio/wav';
+                const formData = new FormData();
+                formData.append('audio', recordedBlob, 'input_audio.' + (mimeType === 'audio/wav' ? 'wav' : mimeType.split('/')[1]));
+
+                fetch('/audio/denoise', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(err => { throw new Error(err.error || 'Denoising failed'); });
+                    }
+                    return response.blob();
+                })
+                .then(blob => {
+                    const denoisedUrl = URL.createObjectURL(blob);
+                    denoisedAudio.src = denoisedUrl;
+                    audioStatus.textContent = 'Denoising complete! Play the denoised audio.';
+                    denoiseAudioBtn.disabled = false;
+
+                    // Load denoised audio into waveform
+                    wavesurferDenoised.loadBlob(blob);
+                    denoisedAudio.classList.remove('hidden');
+                    denoisedPlaceholder.classList.add('hidden');
+                    downloadAudioBtn.classList.remove('hidden');
+                    
+                    // Setup download button
+                    downloadAudioBtn.onclick = function() {
+                        const a = document.createElement('a');
+                        a.href = denoisedUrl;
+                        a.download = 'denoised_audio.wav';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                    };
+                })
+                .catch(err => {
+                    audioStatus.textContent = 'Error: ' + err.message;
+                    console.error('Denoise error:', err);
+                    denoiseAudioBtn.disabled = false;
+                })
+                .finally(() => {
+                    loadingOverlay.classList.add('hidden');
+                });
+            });
+        });
+    </script>
+</body>
+</html>
